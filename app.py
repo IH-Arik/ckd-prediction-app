@@ -552,7 +552,24 @@ def make_prediction_with_shap(input_data):
         # SHAP Explanations
         st.markdown('<div class="icon-header"><i class="fas fa-search-plus"></i> <b>Real SHAP Explanations - Clinical Transparency</b></div>', unsafe_allow_html=True)
         
-
+        if waterfall_img:
+            st.markdown('<b><i class="fas fa-chart-line"></i> Clinical Decision Waterfall</b>', unsafe_allow_html=True)
+            st.markdown("""
+            **How to read this waterfall:**
+            - **Base value**: The model's baseline prediction level.
+            - **Red bars**: Clinical factors that **increase** your patient's risk.
+            - **Blue bars**: Clinical factors that **decrease** your patient's risk.
+            """)
+            st.image(f"data:image/png;base64,{waterfall_img}", use_container_width=True)
+        
+        if summary_img:
+            st.markdown('<b><i class="fas fa-chart-pie"></i> Feature Contribution Summary</b>', unsafe_allow_html=True)
+            st.markdown("""
+            **How to read this summary:**
+            - Shows the magnitude of importance for each clinical feature in this specific prediction.
+            - Longer bars represent factors with higher diagnostic significance.
+            """)
+            st.image(f"data:image/png;base64,{summary_img}", use_container_width=True)
         
         if force_img:
             st.markdown('<b><i class="fas fa-stethoscope"></i> Clinical Feature Impact Plot</b>', unsafe_allow_html=True)
