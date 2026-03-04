@@ -13,7 +13,7 @@ A high-fidelity clinical decision support system for predicting the likelihood o
 
 ```
 ckd-prediction-app/
-├── app.py                   # Main Streamlit entrance
+├── ckd_app_with_real_shap.py # Main Streamlit entrance
 ├── models/                  # Validated model binaries (.pkl)
 ├── data/                    # Clinical datasets (.csv)
 ├── research/
@@ -41,7 +41,7 @@ ckd-prediction-app/
 
 3. **Run the application**:
    ```bash
-   streamlit run app.py
+   streamlit run ckd_app_with_real_shap.py
    ```
 
 ## 🏥 Medical Disclaimer
