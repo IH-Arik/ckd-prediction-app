@@ -20,14 +20,134 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Inject FontAwesome and custom CSS (Standardized method)
-st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"><style>@import url(\'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap\'); .stApp { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important; font-family: \'Inter\', sans-serif !important; } div.stButton > button:first-child { width: 100% !important; border-radius: 12px !important; height: 3.5em !important; background-color: #b91c1c !important; color: white !important; font-weight: 700 !important; border: none !important; box-shadow: 0 4px 15px rgba(185, 28, 28, 0.4) !important; transition: all 0.3s ease !important; text-transform: uppercase !important; letter-spacing: 1px !important; } div.stButton > button:first-child:hover { background-color: #991b1b !important; box-shadow: 0 8px 25px rgba(153, 27, 27, 0.5) !important; transform: translateY(-2px) !important; } h1 { color: #1e3a8a !important; font-weight: 800 !important; } .clinical-card { background-color: white !important; padding: 2rem !important; border-radius: 20px !important; box-shadow: 0 10px 30px rgba(0,0,0,0.08) !important; margin-bottom: 2rem !important; border: 1px solid #e2e8f0 !important; } .icon-header { display: flex !important; align-items: center !important; gap: 12px !important; color: #1e3a8a !important; margin-bottom: 1rem !important; font-weight: 700 !important; font-size: 1.25rem !important; } [data-testid="stMetricValue"] { color: #1e3a8a !important; font-weight: 700 !important; } [data-testid="stSidebar"] { background-color: #ffffff !important; border-right: 1px solid #e2e8f0 !important; }</style>', unsafe_allow_html=True)
+# Inject Advanced CSS for Premium Clinical UI
+st.markdown("""
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Inter:wght@400;600&display=swap');
 
-st.markdown('<h1 class="icon-header"><i class="fas fa-hand-holding-medical"></i> Chronic Kidney Disease (CKD) Prediction System</h1>', unsafe_allow_html=True)
+    :root {
+        --primary: hsl(215, 80%, 45%);
+        --primary-glow: hsla(215, 80%, 45%, 0.3);
+        --alert: hsl(0, 75%, 55%);
+        --alert-glow: hsla(0, 75%, 55%, 0.4);
+        --success: hsl(142, 60%, 45%);
+        --glass-bg: rgba(255, 255, 255, 0.7);
+        --glass-border: rgba(255, 255, 255, 0.4);
+        --text-main: #1e293b;
+    }
+
+    .stApp {
+        background: radial-gradient(circle at top right, #e0e7ff, #f1f5f9),
+                    radial-gradient(circle at bottom left, #ecf2ff, #f8fafc) !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+
+    /* Glass Management */
+    .clinical-card {
+        background: var(--glass-bg) !important;
+        backdrop-filter: blur(12px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+        border-radius: 24px !important;
+        border: 1px solid var(--glass-border) !important;
+        padding: 2.5rem !important;
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07) !important;
+        margin-bottom: 2rem !important;
+        animation: fadeInUp 0.8s ease-out;
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulseGlow {
+        0% { box-shadow: 0 0 0 0 var(--alert-glow); }
+        70% { box-shadow: 0 0 0 15px rgba(185, 28, 28, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(185, 28, 28, 0); }
+    }
+
+    @keyframes float {
+        0% { transform: translateY(0px); }
+        50% { transform: translateY(-5px); }
+        100% { transform: translateY(0px); }
+    }
+
+    /* Interactive Elements */
+    div.stButton > button:first-child {
+        width: 100% !important;
+        border-radius: 16px !important;
+        height: 4em !important;
+        background: linear-gradient(135deg, var(--alert) 0%, #991b1b 100%) !important;
+        color: white !important;
+        font-weight: 800 !important;
+        font-family: 'Outfit', sans-serif !important;
+        border: none !important;
+        text-transform: uppercase !important;
+        letter-spacing: 1.5px !important;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+        animation: pulseGlow 2s infinite !important;
+    }
+
+    div.stButton > button:first-child:hover {
+        transform: scale(1.02) translateY(-2px) !important;
+        box-shadow: 0 12px 30px var(--alert-glow) !important;
+    }
+
+    h1 {
+        font-family: 'Outfit', sans-serif !important;
+        color: #1e3a8a !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.5px !important;
+        font-size: 2.75rem !important;
+    }
+
+    .icon-header {
+        display: flex !important;
+        align-items: center !important;
+        gap: 15px !important;
+        color: #1e40af !important;
+        margin-bottom: 1.5rem !important;
+        font-weight: 700 !important;
+        font-family: 'Outfit', sans-serif !important;
+    }
+
+    .icon-header i {
+        animation: float 3s ease-in-out infinite;
+        color: var(--primary);
+    }
+
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background-color: rgba(255, 255, 255, 0.9) !important;
+        border-right: 1px solid rgba(0,0,0,0.05) !important;
+        backdrop-filter: blur(10px) !important;
+    }
+
+    /* Metric refinement */
+    [data-testid="stMetric"] {
+        background: white !important;
+        padding: 1.5rem !important;
+        border-radius: 20px !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03) !important;
+        border: 1px solid #f1f5f9 !important;
+    }
+
+    [data-testid="stMetricValue"] {
+        color: var(--primary) !important;
+        font-family: 'Outfit', sans-serif !important;
+        font-weight: 700 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<h1 class="icon-header"><i class="fas fa-microscope"></i> CKD <span style="color:var(--primary)">Predict</span> Pro</h1>', unsafe_allow_html=True)
 st.markdown("""
 <div class="clinical-card">
-    This clinical decision support system predicts the likelihood of CKD occurrence within 35 months. 
-    Powered by a validated machine learning model and <b>Real SHAP Explainability</b> for medical transparency.
+    <h3 style="margin-top:0; font-family:'Outfit';">Clinical Decision Intelligence</h3>
+    This high-fidelity system leverages validated neural patterns to predict CKD occurrence within a 35-month window. 
+    Experience <b>Grade-A Transparency</b> with integrated real-time SHAP clinical diagnostics.
 </div>
 """, unsafe_allow_html=True)
 
@@ -515,9 +635,19 @@ def make_prediction_with_shap(input_data):
         
         with col1:
             if prediction == 1:
-                st.markdown('<div style="background-color: #fee2e2; color: #b91c1c; padding: 1rem; border-radius: 8px; font-weight: 700;"><i class="fas fa-exclamation-triangle"></i> CLINICAL ALERT: HIGH RISK - CKD predicted within 35 months</div>', unsafe_allow_html=True)
+                st.markdown("""
+                <div class="clinical-card" style="border-left: 8px solid var(--alert); background: rgba(254, 226, 226, 0.4) !important;">
+                    <div class="icon-header" style="color: var(--alert);"><i class="fas fa-exclamation-triangle"></i> CLINICAL ALERT</div>
+                    <div style="font-weight: 800; font-size: 1.1rem; color: #991b1b;">High Risk: CKD presence predicted within 35 months.</div>
+                </div>
+                """, unsafe_allow_html=True)
             else:
-                st.markdown('<div style="background-color: #dcfce7; color: #15803d; padding: 1rem; border-radius: 8px; font-weight: 700;"><i class="fas fa-check-circle"></i> CLINICAL STATUS: LOW RISK - No CKD predicted within 35 months</div>', unsafe_allow_html=True)
+                st.markdown("""
+                <div class="clinical-card" style="border-left: 8px solid var(--success); background: rgba(220, 252, 231, 0.4) !important;">
+                    <div class="icon-header" style="color: var(--success);"><i class="fas fa-check-circle"></i> CLINICAL STATUS</div>
+                    <div style="font-weight: 800; font-size: 1.1rem; color: #166534;">Low Risk: No CKD predicted within 35 months.</div>
+                </div>
+                """, unsafe_allow_html=True)
         
         with col2:
             # Probability display
@@ -528,26 +658,26 @@ def make_prediction_with_shap(input_data):
             st.metric("No CKD Probability", f"{prob_no_ckd:.1f}%")
         
         # Risk assessment
-        st.markdown('<div class="icon-header"><i class="fas fa-heart-rate"></i> <b>Risk Assessment</b></div>', unsafe_allow_html=True)
+        st.markdown('<div class="icon-header"><i class="fas fa-wave-square"></i> <b>Risk Assessment</b></div>', unsafe_allow_html=True)
         
         if prob_ckd < 20:
-            risk_level = "Very Low"
-            risk_color = "#15803d"
+            risk_level, risk_color, risk_bg = "Very Low", "var(--success)", "rgba(220, 252, 231, 0.2)"
         elif prob_ckd < 40:
-            risk_level = "Low"
-            risk_color = "#ca8a04"
+            risk_level, risk_color, risk_bg = "Low", "#ca8a04", "rgba(254, 249, 195, 0.2)"
         elif prob_ckd < 60:
-            risk_level = "Moderate"
-            risk_color = "#ea580c"
+            risk_level, risk_color, risk_bg = "Moderate", "#ea580c", "rgba(255, 237, 213, 0.2)"
         elif prob_ckd < 80:
-            risk_level = "High"
-            risk_color = "#b91c1c"
+            risk_level, risk_color, risk_bg = "High", "var(--alert)", "rgba(254, 226, 226, 0.2)"
         else:
-            risk_level = "Very High"
-            risk_color = "#991b1b"
+            risk_level, risk_color, risk_bg = "Very High", "#991b1b", "rgba(254, 226, 226, 0.4)"
         
-        st.markdown(f'<div style="font-weight: 700; color: {risk_color}; margin-bottom: 10px;"><i class="fas fa-microscope"></i> Risk Level: {risk_level}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div style="font-weight: 700; color: #1e3a8a;"><i class="fas fa-percentage"></i> CKD Probability: {prob_ckd:.1f}%</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="clinical-card" style="background: {risk_bg} !important; border: 2px solid {risk_color}; text-align: center;">
+            <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 0.5rem;">Diagnostic Conclusion</div>
+            <div style="font-size: 2.5rem; font-weight: 800; color: {risk_color}; font-family: 'Outfit'; margin-bottom: 0.5rem;">{risk_level} Risk</div>
+            <div style="font-weight: 700; color: #1e3a8a; font-size: 1.2rem;"><i class="fas fa-percentage"></i> {prob_ckd:.1f}% Probability</div>
+        </div>
+        """, unsafe_allow_html=True)
         
         # SHAP Explanations
         st.markdown('<div class="icon-header"><i class="fas fa-search-plus"></i> <b>Real SHAP Explanations - Clinical Transparency</b></div>', unsafe_allow_html=True)
