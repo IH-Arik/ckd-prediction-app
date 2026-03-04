@@ -1,0 +1,17 @@
+\begin{table*}[ht]
+\centering
+\caption{Performance of the proposed EDCKD model on the external validation dataset using the training-optimized threshold.}
+\label{tab:external_validation_metrics}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccccccccc}
+\toprule
+\textbf{Model} & \textbf{TP} & \textbf{FN} & \textbf{FP} & \textbf{TN} & \textbf{Accuracy} & \textbf{ROC AUC} & \textbf{F1-Score} & \textbf{Precision} & \textbf{Recall} & \textbf{MCC} & \textbf{Cohen's $\kappa$} \\
+\midrule
+\textbf{Proposed EDCKD} & 211 & 39 & 39 & 111 & 0.8050 & 0.8579 & 0.8440 & 0.8440 & 0.8440 & 0.5840 & 0.5840 \\
+\bottomrule
+\end{tabular}}
+\end{table*}
+
+To evaluate the generalizability and clinical transportability of the proposed EDCKD model, external validation was performed using an independent Chronic Kidney Disease (CKD) dataset from the UCI Machine Learning Repository. External validation is essential in clinical prediction modeling to assess whether a model trained on one patient population can maintain performance on an independent cohort, thereby mitigating overfitting and supporting real-world applicability. The EDCKD model was trained exclusively on the Clinical CKD dataset and evaluated directly on the UCI dataset without retraining or recalibration; the decision threshold optimized during training was applied as-is to the external cohort. Although the Clinical CKD dataset originally included 23 predictive features, only 9 clinically overlapping variables were available in the UCI dataset. These shared features were harmonized through feature mapping, categorical encoding, and unit normalization, as summarized in Table~\ref{tab:feature_mapping}. Non-overlapping features were excluded to preserve strict dataset independence and reflect a realistic cross-institutional deployment scenario.
+
+As shown in Table~\ref{tab:external_validation_metrics}, which includes the confusion matrix (TP, FN, FP, TN) along with standard evaluation metrics, the EDCKD model achieved an accuracy of 0.8050, precision of 0.8440, recall of 0.8440, and an F1-score of 0.8440 on the external validation dataset. The ROC AUC was 0.8579, while Matthews Correlation Coefficient (MCC) and Cohen's $\kappa$ were both 0.584, indicating balanced predictive performance beyond chance. Notably, precision equals recall and MCC equals Cohen's $\kappa$ due to the symmetric error distribution (FP = FN = 39), a mathematical property of the confusion matrix rather than a coincidence. These results demonstrate stable discriminative ability despite dataset shift and reduced feature availability. The model correctly identified 211 CKD cases while missing 39 patients, and correctly classified 111 non-CKD individuals with 39 false positives. The confusion matrix in Table~\ref{tab:external_validation_metrics} illustrates a consistent balance between sensitivity and specificity, supporting the robustness of the EDCKD model under external validation. Overall, these findings confirm that the EDCKD model preserves strong predictive capability beyond the training environment, even with a reduced and harmonized feature set comprising only 9 of the original 23 features. The external validation results reinforce the model's generalizability and clinical transportability, highlighting its potential for early and reliable CKD screening across diverse healthcare settings.

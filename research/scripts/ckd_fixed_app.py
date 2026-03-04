@@ -3,14 +3,11 @@ import pandas as pd
 import numpy as np
 import joblib
 import warnings
-import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
 warnings.filterwarnings('ignore')
 
 # Set page config
 st.set_page_config(
-    page_title="CKD Prediction App (Fixed Model with SHAP)",
+    page_title="CKD Prediction App (Fixed Model)",
     page_icon="🏥",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -19,8 +16,7 @@ st.set_page_config(
 # Title and description
 st.title("🏥 Chronic Kidney Disease (CKD) Prediction System")
 st.markdown("""
-This app predicts the likelihood of CKD occurrence within 35 months using the **FIXED** model 
-with 96.4% CKD detection accuracy and provides **SHAP explanations** for predictions.
+This app predicts the likelihood of CKD occurrence within 35 months using the **FIXED** model.
 """)
 
 # Load model
@@ -35,184 +31,7 @@ def load_model():
 
 model = load_model()
 
-# Simple SHAP explanation function
-def create_shap_explanation(input_data, prediction, probability):
-    """Create SHAP-like explanation without requiring shap library"""
-    
-    # Feature importance based on medical knowledge and model behavior
-    feature_importance = {
-        'eGFRBaseline': {'importance': 0.15, 'impact': 'Lower eGFR increases CKD risk'},
-        'AgeBaseline': {'importance': 0.12, 'impact': 'Higher age increases CKD risk'},
-        'HgbA1C': {'importance': 0.10, 'impact': 'Higher HbA1c increases CKD risk'},
-        'CreatnineBaseline': {'importance': 0.10, 'impact': 'Higher creatinine increases CKD risk'},
-        'HistoryDiabetes': {'importance': 0.08, 'impact': 'Diabetes history increases CKD risk'},
-        'HistoryHTN ': {'importance': 0.08, 'impact': 'Hypertension increases CKD risk'},
-        'sBPBaseline': {'importance': 0.07, 'impact': 'Higher systolic BP increases CKD risk'},
-        'BMIBaseline': {'importance': 0.06, 'impact': 'Higher BMI increases CKD risk'},
-        'TriglyceridesBaseline': {'importance': 0.05, 'impact': 'Higher triglycerides increase CKD risk'},
-        'CholesterolBaseline': {'importance': 0.04, 'impact': 'Higher cholesterol increases CKD risk'},
-        'dBPBaseline': {'importance': 0.04, 'impact': 'Higher diastolic BP increases CKD risk'},
-        'Age.3.categories': {'importance': 0.03, 'impact': 'Higher age category increases CKD risk'},
-        'DMmeds': {'importance': 0.03, 'impact': 'Diabetes medications indicate higher risk'},
-        'HTNmeds': {'importance': 0.02, 'impact': 'Hypertension medications indicate higher risk'},
-        'ACEIARB': {'importance': 0.02, 'impact': 'ACEI/ARB may indicate kidney protection'},
-        'HistoryCHD': {'importance': 0.02, 'impact': 'Heart disease history increases CKD risk'},
-        'HistoryVascular': {'importance': 0.01, 'impact': 'Vascular disease increases CKD risk'},
-        'HistorySmoking': {'importance': 0.01, 'impact': 'Smoking increases CKD risk'},
-        'HistoryDLD': {'importance': 0.01, 'impact': 'Dyslipidemia increases CKD risk'},
-        'HistoryObesity': {'importance': 0.01, 'impact': 'Obesity history increases CKD risk'},
-        'DLDmeds': {'importance': 0.01, 'impact': 'Lipid medications indicate risk factors'},
-        'Gender': {'importance': 0.01, 'impact': 'Gender may influence CKD risk'},
-        'StudyID': {'importance': 0.00, 'impact': 'Identifier, no clinical impact'},
-        'TimeToEventMonths': {'importance': 0.00, 'impact': 'Time parameter, no impact on risk'}
-    }
-    
-    # Calculate SHAP values based on input values and prediction
-    shap_values = {}
-    base_value = 0.5  # Base probability
-    
-    for feature, info in feature_importance.items():
-        if feature in input_data:
-            value = input_data[feature]
-            importance = info['importance']
-            
-            # Calculate contribution based on feature value and medical knowledge
-            if feature == 'eGFRBaseline':
-                # Lower eGFR = higher risk
-                contribution = (90 - value) / 100 * importance
-            elif feature == 'AgeBaseline':
-                # Higher age = higher risk
-                contribution = (value - 40) / 100 * importance
-            elif feature == 'HgbA1C':
-                # Higher HbA1c = higher risk
-                contribution = (value - 5.5) / 10 * importance
-            elif feature == 'CreatnineBaseline':
-                # Higher creatinine = higher risk
-                contribution = (value - 70) / 100 * importance
-            elif feature in ['HistoryDiabetes', 'HistoryHTN ', 'HistoryCHD', 'HistoryVascular', 'HistorySmoking', 'HistoryDLD', 'HistoryObesity']:
-                # Binary features
-                contribution = value * importance
-            elif feature in ['DMmeds', 'HTNmeds', 'DLDmeds']:
-                # Medications indicate existing conditions
-                contribution = value * importance * 0.5
-            elif feature == 'ACEIARB':
-                # ACEI/ARB may be protective
-                contribution = -value * importance * 0.3
-            elif feature in ['sBPBaseline', 'dBPBaseline']:
-                # Higher BP = higher risk
-                if feature == 'sBPBaseline':
-                    contribution = (value - 120) / 100 * importance
-                else:
-                    contribution = (value - 80) / 100 * importance
-            elif feature == 'BMIBaseline':
-                # Higher BMI = higher risk
-                contribution = (value - 25) / 50 * importance
-            elif feature in ['CholesterolBaseline', 'TriglyceridesBaseline']:
-                # Higher values = higher risk
-                if feature == 'CholesterolBaseline':
-                    contribution = (value - 5) / 10 * importance
-                else:
-                    contribution = (value - 1.5) / 5 * importance
-            elif feature == 'Age.3.categories':
-                # Higher category = higher risk
-                contribution = value * importance
-            else:
-                contribution = 0
-            
-            shap_values[feature] = contribution
-    
-    # Adjust SHAP values to match the prediction probability
-    total_shap = sum(shap_values.values())
-    target_shap = probability - base_value
-    
-    if total_shap != 0:
-        scaling_factor = target_shap / total_shap
-        for feature in shap_values:
-            shap_values[feature] *= scaling_factor
-    
-    return shap_values, feature_importance
 
-def create_shap_plot(shap_values, feature_importance):
-    """Create SHAP waterfall plot"""
-    
-    # Sort features by absolute SHAP value
-    sorted_features = sorted(shap_values.items(), key=lambda x: abs(x[1]), reverse=True)
-    top_features = sorted_features[:10]  # Top 10 features
-    
-    features = [f[0] for f in top_features]
-    values = [f[1] for f in top_features]
-    
-    # Create waterfall plot
-    fig = go.Figure()
-    
-    # Add bars
-    base = 0
-    colors = []
-    for i, (feature, value) in enumerate(top_features):
-        if value > 0:
-            colors.append('red')
-        else:
-            colors.append('blue')
-        
-        fig.add_trace(go.Bar(
-            x=[value],
-            y=[feature],
-            orientation='h',
-            name=feature,
-            marker_color=colors[i],
-            text=[f'{value:.3f}'],
-            textposition='outside'
-        ))
-    
-    fig.update_layout(
-        title='SHAP Values - Feature Contributions to CKD Risk',
-        xaxis_title='SHAP Value (Impact on Prediction)',
-        yaxis_title='Features',
-        height=600,
-        showlegend=False
-    )
-    
-    return fig
-
-def create_feature_importance_plot(feature_importance):
-    """Create feature importance plot"""
-    
-    # Sort by importance
-    sorted_features = sorted(feature_importance.items(), key=lambda x: x[1]['importance'], reverse=True)
-    top_features = sorted_features[:10]
-    
-    features = [f[0] for f in top_features]
-    importance = [f[1]['importance'] for f in top_features]
-    
-    fig = go.Figure(data=[
-        go.Bar(x=importance, y=features, orientation='h', marker_color='lightblue')
-    ])
-    
-    fig.update_layout(
-        title='Top 10 Feature Importance',
-        xaxis_title='Importance Score',
-        yaxis_title='Features',
-        height=500
-    )
-    
-    return fig
-
-# Model performance info
-def show_model_info():
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📊 Model Performance")
-    st.sidebar.markdown("""
-    **Fixed Model Metrics:**
-    - **Accuracy:** 98.2%
-    - **CKD Detection:** 96.4%
-    - **Precision:** 88.5%
-    - **AUC:** 99.8%
-    
-    **Clinical Validity:**
-    - Sensitivity: 96.4%
-    - Specificity: 98.4%
-    - False Negative Rate: 3.6%
-    """)
 
 # Sidebar for inputs
 st.sidebar.header("📋 Patient Information")
@@ -305,8 +124,8 @@ def create_feature_importance_display():
     
     st.info("""
     🏥 **Clinical Note**: The fixed model has 96.4% sensitivity for CKD detection, 
-    meaning it correctly identifies 96 out of 100 CKD cases. SHAP explanations 
-    help understand which factors contributed most to each prediction.
+    meaning it correctly identifies 96 out of 100 CKD cases. This is a significant 
+    improvement over the previous model which had 0% detection rate.
     """)
 
 def main():
@@ -329,11 +148,10 @@ def main():
         
         # Prediction button
         if st.button("🔮 Predict CKD Risk", type="primary", use_container_width=True):
-            prediction_result = make_prediction(input_data)
+            make_prediction(input_data)
     
     with col2:
         create_feature_importance_display()
-        show_model_info()
     
     # Disclaimer
     st.warning("""
@@ -343,7 +161,7 @@ def main():
     """)
 
 def make_prediction(input_data):
-    """Make prediction using the fixed model and show SHAP explanations"""
+    """Make prediction using the fixed model"""
     
     try:
         # Convert to DataFrame
@@ -352,9 +170,6 @@ def make_prediction(input_data):
         # Make prediction
         prediction = model.predict(input_df)[0]
         probability = model.predict_proba(input_df)[0]
-        
-        # Generate SHAP explanations
-        shap_values, feature_importance = create_shap_explanation(input_data, prediction, probability[1])
         
         # Display results
         st.subheader("🎯 Prediction Results")
@@ -397,35 +212,15 @@ def make_prediction(input_data):
         st.write(f"{color} **Risk Level: {risk_level}**")
         st.write(f"**CKD Probability: {prob_ckd:.1f}%**")
         
-        # SHAP Explanations
-        st.subheader("🔍 SHAP Explanations - Why this prediction?")
+        # Model confidence
+        if prob_ckd > 70 or prob_ckd < 30:
+            confidence = "High"
+        elif prob_ckd > 60 or prob_ckd < 40:
+            confidence = "Medium"
+        else:
+            confidence = "Low"
         
-        # Create SHAP plot
-        shap_fig = create_shap_plot(shap_values, feature_importance)
-        st.plotly_chart(shap_fig, use_container_width=True)
-        
-        # Feature contributions table
-        st.subheader("📊 Feature Contributions")
-        
-        # Sort features by absolute contribution
-        sorted_features = sorted(shap_values.items(), key=lambda x: abs(x[1]), reverse=True)
-        
-        contribution_data = []
-        for feature, value in sorted_features[:10]:
-            contribution_data.append({
-                'Feature': feature,
-                'Contribution': f"{value:.4f}",
-                'Impact': 'Increases Risk' if value > 0 else 'Decreases Risk',
-                'Description': feature_importance.get(feature, {}).get('impact', 'N/A')
-            })
-        
-        contrib_df = pd.DataFrame(contribution_data)
-        st.dataframe(contrib_df, use_container_width=True)
-        
-        # Feature importance plot
-        st.subheader("📈 Overall Feature Importance")
-        importance_fig = create_feature_importance_plot(feature_importance)
-        st.plotly_chart(importance_fig, use_container_width=True)
+        st.write(f"**Model Confidence: {confidence}**")
         
         # Recommendations
         st.subheader("💡 Clinical Recommendations")
@@ -472,28 +267,11 @@ def make_prediction(input_data):
         
         st.bar_chart(prob_df.set_index('Outcome'), use_container_width=True)
         
-        # Model performance info
-        st.subheader("📈 Model Performance Information")
-        st.info(f"""
-        **Fixed Model Statistics:**
-        - Overall Accuracy: 98.2%
-        - CKD Detection Rate: 96.4%
-        - False Negative Rate: Only 3.6%
-        - Validated on 491 patient records
-        
-        **SHAP Explanations:**
-        - SHAP values show how each feature contributed to the prediction
-        - Positive values increase CKD risk
-        - Negative values decrease CKD risk
-        - Helps clinicians understand the model's reasoning
-        """)
-        
-        return True
+
         
     except Exception as e:
         st.error(f"Error making prediction: {e}")
         st.write("Please check your input values and try again.")
-        return False
 
 if __name__ == "__main__":
     main()

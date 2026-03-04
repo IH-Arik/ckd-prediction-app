@@ -1,0 +1,56 @@
+\subsection{External Validation}
+\label{sec:external_validation}
+
+To evaluate model generalizability and robustness, external validation was conducted using an independent dataset from the UCI Machine Learning Repository~\cite{UCidataset}. The UCI Chronic Kidney Disease dataset~\cite{almustafa2018dataset} was selected for its clinical relevance, widespread use in CKD prediction benchmarks, and overlapping renal and demographic features with the training dataset. External validation on an independent cohort is essential to assess whether the model's predictive performance generalizes beyond the development population and clinical settings, and to evaluate potential overfitting to the training distribution.
+
+Table~\ref{tab:dataset_comparison} summarizes the key demographic and clinical characteristics of both datasets. Notable differences include CKD prevalence (11.4\% vs.\ 62.5\%), serum creatinine distributions, and the absence of gender information in the UCI dataset. These differences reflect distinct healthcare settings and patient populations, reinforcing the rigor of cross-cohort validation.
+
+\begin{table}[ht]
+\centering
+\caption{Comparison of dataset characteristics between Figshare (training) and UCI (external validation) datasets}
+\label{tab:dataset_comparison}
+\begin{tabular}{|p{4.5cm}|p{4.5cm}|p{4.5cm}|}
+\hline
+\textbf{Characteristic} & \textbf{Figshare (Training)} & \textbf{UCI (Validation)} \\ \hline
+Total samples & 491 & 400 \\ \hline
+CKD prevalence (\%) & 11.4\% (56/491) & 62.5\% (250/400) \\ \hline
+Age (mean $\pm$ SD) & 53.2 $\pm$ 13.8 years & 51.5 $\pm$ 17.2 years \\ \hline
+Gender (male \%) & 50.9\% & Not available \\ \hline
+Serum creatinine (mean $\pm$ SD) & 67.9 $\pm$ 17.9 $\mu$mol/L & 3.1 $\pm$ 5.7 mg/dL \\ \hline
+Blood pressure (mean $\pm$ SD) & 131.4 $\pm$ 15.7 / 76.9 $\pm$ 10.7 mmHg & 76.5 $\pm$ 13.7 mmHg (diastolic only) \\ \hline
+Diabetes prevalence (\%) & 43.8\% & 34.2\% \\ \hline
+Hypertension prevalence (\%) & 68.2\% & 36.8\% \\ \hline
+Number of features & 23 total & 24 total, 9 mapped \\ \hline
+\end{tabular}
+\end{table}
+
+The same preprocessing pipeline used for the Figshare training dataset was applied to the UCI validation dataset, including missing value imputation, standardized scaling, and feature selection criteria, to ensure methodological consistency and prevent systematic biases. No retraining or parameter tuning was performed on the external dataset, preserving the integrity of the external validation protocol. A key challenge in external validation stems from differences in feature nomenclature, measurement protocols, and available variables between datasets collected in different healthcare settings. To address this, a feature mapping strategy was developed using three approaches: (1)~direct mapping for clinically identical definitions, (2)~calculated features derived from established clinical formulas, and (3)~estimated features approximated from related biomarkers when exact measurements were unavailable. Features that could not be reliably mapped or estimated were treated as missing values and handled by the imputation stage of the preprocessing pipeline. The complete feature mapping is detailed in Table~\ref{tab:feature_mapping}.
+
+\begin{table}[ht]
+\centering
+\caption{Feature mapping between Figshare and UCI datasets}
+\label{tab:feature_mapping}
+\begin{tabular}{|p{3.8cm}|p{3.2cm}|p{2.4cm}|p{5.8cm}|}
+\hline
+\textbf{Feature (Figshare)} & \textbf{UCI Feature} & \textbf{Mapping Type} & \textbf{Notes} \\ \hline
+AgeBaseline & age & Direct & Same unit (years) \\ \hline
+dBPBaseline & bp & Direct & UCI \texttt{bp} represents diastolic blood pressure (mmHg) \\ \hline
+sBPBaseline & bp & Estimated & Systolic BP estimated from diastolic BP using clinical pulse pressure approximation \\ \hline
+CreatnineBaseline & sc & Direct & Serum creatinine; unit conversion applied (mg/dL to $\mu$mol/L) \\ \hline
+Gender & -- & Not available & Gender information not present in UCI dataset; set as missing \\ \hline
+eGFRBaseline & age + sc & Calculated & CKD-EPI 2021 equation (race-free formulation)~\cite{inker2021ckdepi}; computed without gender due to its absence \\ \hline
+HgbA1C & bgr & Estimated & HbA1c estimated from blood glucose using clinical approximation: HbA1c $\approx$ (glucose + 46.7) / 28.7~\cite{nathan2008a1c}; introduces uncertainty due to imperfect single-measurement correlation \\ \hline
+HistoryHTN & htn & Direct & Hypertension history (binary) \\ \hline
+HistoryDiabetes & dm & Direct & Diabetes mellitus history (binary) \\ \hline
+HistoryCHD & cad & Direct & Coronary artery disease / coronary heart disease (binary) \\ \hline
+HistoryVascular & -- & Not available & No direct equivalent in UCI dataset; set as missing \\ \hline
+HistorySmoking & -- & Not available & Not recorded in UCI dataset; set as missing \\ \hline
+Others (e.g., DLDmeds, DMmeds, HTNmeds, ACEIARB, BMI, lipid markers, TimeToEvent) & -- & Not available & Set as missing and handled by imputation \\ \hline
+\end{tabular}
+\end{table}
+
+For calculated features such as estimated glomerular filtration rate (eGFR), the CKD-EPI 2021 equation~\cite{inker2021ckdepi} was used to estimate kidney function based on serum creatinine and age. The 2021 formulation removes the race coefficient present in the earlier 2009 equation~\cite{levey2009ckdepi}, eliminating the need for race-based assumptions and aligning with current clinical guidelines. Since gender information was absent from the UCI dataset, the eGFR calculation used a default assumption, which may introduce additional estimation error. For HbA1c estimation, a clinically validated conversion formula relating random blood glucose to HbA1c was applied~\cite{nathan2008a1c}; however, this approximation introduces inherent uncertainty, as a single glucose measurement reflects an instantaneous value rather than the three-month glycemic average captured by HbA1c. Of the 23~features utilized by the trained model, only 9~features were directly or approximately mappable to the UCI dataset, while the remaining 14~features were unavailable and treated as missing values. This incomplete feature coverage may attenuate the model's predictive performance on the external dataset; nevertheless, this scenario reflects realistic clinical deployment, where complete feature overlap between institutions is rarely guaranteed.
+
+After preprocessing, the trained model was applied to the UCI validation dataset without any retraining or threshold recalibration. The external validation results and performance comparison are presented in the Results and Analysis section.
+
+Several limitations of the external validation should be acknowledged. First, validation was conducted on a single external dataset; multi-site validation across diverse populations would provide stronger evidence of generalizability. Second, only 9 of 23 training features were available in the UCI dataset, and the reliance on estimated features (e.g., HbA1c from glucose, systolic BP from diastolic BP) introduces measurement uncertainty. Third, gender information was entirely absent from the UCI dataset, precluding the use of gender-dependent features and the standard CKD-EPI calculation. Fourth, the UCI dataset has a substantially higher CKD prevalence (62.5\%) compared to the Figshare training set (11.4\%), which may affect metric interpretation due to class distribution differences. Despite these limitations, the external validation provides meaningful evidence of the model's ability to generalize beyond the development cohort, a critical requirement for clinical translation of machine learning models~\cite{steyerberg2019clinical, collins2015tripod}.

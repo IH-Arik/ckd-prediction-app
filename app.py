@@ -14,24 +14,28 @@ warnings.filterwarnings('ignore')
 
 # Set page config
 st.set_page_config(
-    page_title="CKD Prediction App (Fixed Model with Real SHAP)",
-    page_icon="🏥",
+    page_title="CKD Prediction System",
+    page_icon="🩺",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Title and description
-st.title("🏥 Chronic Kidney Disease (CKD) Prediction System")
+# Inject FontAwesome and custom CSS (Standardized method)
+st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"><style>@import url(\'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap\'); .stApp { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important; font-family: \'Inter\', sans-serif !important; } div.stButton > button:first-child { width: 100% !important; border-radius: 12px !important; height: 3.5em !important; background-color: #b91c1c !important; color: white !important; font-weight: 700 !important; border: none !important; box-shadow: 0 4px 15px rgba(185, 28, 28, 0.4) !important; transition: all 0.3s ease !important; text-transform: uppercase !important; letter-spacing: 1px !important; } div.stButton > button:first-child:hover { background-color: #991b1b !important; box-shadow: 0 8px 25px rgba(153, 27, 27, 0.5) !important; transform: translateY(-2px) !important; } h1 { color: #1e3a8a !important; font-weight: 800 !important; } .clinical-card { background-color: white !important; padding: 2rem !important; border-radius: 20px !important; box-shadow: 0 10px 30px rgba(0,0,0,0.08) !important; margin-bottom: 2rem !important; border: 1px solid #e2e8f0 !important; } .icon-header { display: flex !important; align-items: center !important; gap: 12px !important; color: #1e3a8a !important; margin-bottom: 1rem !important; font-weight: 700 !important; font-size: 1.25rem !important; } [data-testid="stMetricValue"] { color: #1e3a8a !important; font-weight: 700 !important; } [data-testid="stSidebar"] { background-color: #ffffff !important; border-right: 1px solid #e2e8f0 !important; }</style>', unsafe_allow_html=True)
+
+st.markdown('<h1 class="icon-header"><i class="fas fa-hand-holding-medical"></i> Chronic Kidney Disease (CKD) Prediction System</h1>', unsafe_allow_html=True)
 st.markdown("""
-This app predicts the likelihood of CKD occurrence within 35 months using the **FIXED** model 
-with 96.4% CKD detection accuracy and provides **Real SHAP explanations** for predictions.
-""")
+<div class="clinical-card">
+    This clinical decision support system predicts the likelihood of CKD occurrence within 35 months. 
+    Powered by a validated machine learning model and <b>Real SHAP Explainability</b> for medical transparency.
+</div>
+""", unsafe_allow_html=True)
 
 # Load model
 @st.cache_resource
 def load_model():
     try:
-        model = joblib.load('ckd_model_fixed.pkl')
+        model = joblib.load('models/ckd_model_fixed.pkl')
         return model
     except Exception as e:
         st.error(f"Error loading model: {e}")
@@ -45,7 +49,7 @@ def create_shap_explainer(_model):
     """Create SHAP explainer for the pipeline model"""
     try:
         # Use a small sample of data for background
-        df = pd.read_csv('pone.0199920.csv')
+        df = pd.read_csv('data/pone.0199920.csv')
         df = df.replace('#NULL!', np.nan)
         
         # Convert to numeric
@@ -162,7 +166,7 @@ def create_shap_waterfall_plot(input_data, prediction, probability):
         
         plt.xlabel('Features')
         plt.ylabel('Prediction Value')
-        plt.title(f'SHAP Waterfall Plot\\nBase: {base_value:.3f} → Final: {cumulative_values[-1]:.3f} (CKD Risk: {probability*100:.1f}%)')
+        plt.title(f'SHAP Waterfall Plot - Base: {base_value:.3f} to Final: {cumulative_values[-1]:.3f}')
         plt.grid(True, alpha=0.3)
         plt.legend()
         plt.tight_layout()
@@ -247,8 +251,7 @@ def create_shap_summary_plot(input_data):
         return None
 
 def create_shap_force_plot(input_data, prediction, probability):
-    """Create simplified SHAP force plot"""
-    
+    """Create a SHAP force plot and return as base64 string"""
     try:
         if explainer is None:
             return None
@@ -256,81 +259,48 @@ def create_shap_force_plot(input_data, prediction, probability):
         # Convert input to DataFrame
         input_df = pd.DataFrame([input_data])
         
-        # Calculate SHAP values
+        # Get SHAP values
         shap_values = explainer(input_df)
         
-        # Get values for the predicted class
-        if len(shap_values.values.shape) > 1:
-            # Use the values for the predicted class
-            if prediction == 1:
-                shap_vals = shap_values.values[0, :, 1]  # Positive class
-                base_value = explainer.expected_value[1]
-            else:
-                shap_vals = shap_values.values[0, :, 0]  # Negative class
-                base_value = explainer.expected_value[0]
+        # Use simple matplotlib bar chart if force_plot fails or is confusing
+        plt.figure(figsize=(12, 6))
+        
+        # Determine base value and shap values for the predicted class
+        if hasattr(explainer.expected_value, "__len__"):
+            base_val = explainer.expected_value[1] if prediction == 1 else explainer.expected_value[0]
+            vals = shap_values.values[0, :, 1] if prediction == 1 else shap_values.values[0, :, 0]
         else:
-            shap_vals = shap_values.values[0]
-            base_value = explainer.expected_value
-        
-        # Ensure base_value is scalar
-        if hasattr(base_value, '__len__') and len(base_value) > 1:
-            base_value = base_value[1] if prediction == 1 else base_value[0]
-        base_value = float(base_value)
-        
-        # Ensure shap_vals is 1D array
-        if hasattr(shap_vals, 'shape') and len(shap_vals.shape) > 1:
-            shap_vals = shap_vals.flatten()
-        
-        # Get feature names
+            base_val = explainer.expected_value
+            vals = shap_values.values[0]
+            
+        # Create a horizontal bar chart for force representation
+        # Features that increase risk (Red) vs Decrease (Blue)
+        # Sort by absolute value to show most impactful features
         feature_names = input_df.columns.tolist()
+        sorted_indices = np.argsort(np.abs(vals))[-15:] # Top 15 features
         
-        # Create matplotlib figure
-        plt.figure(figsize=(14, 6))
+        # Filter names and values based on sorted indices
+        display_names = [feature_names[i] for i in sorted_indices]
+        display_vals = vals[sorted_indices]
         
-        # Create force plot manually
-        final_value = base_value + np.sum(shap_vals)
+        colors = ['red' if x > 0 else 'blue' for x in display_vals]
         
-        # Plot base value
-        plt.bar(0, base_value, color='gray', alpha=0.7, width=0.3, label=f'Base Value: {base_value:.3f}')
-        
-        # Plot each feature contribution
-        x_pos = 1
-        for i, (name, val) in enumerate(zip(feature_names, shap_vals)):
-            color = 'red' if val > 0 else 'blue'
-            plt.bar(x_pos, val, bottom=base_value + np.sum(shap_vals[:i]), color=color, alpha=0.7, width=0.8)
-            x_pos += 1
-        
-        # Plot final value
-        plt.bar(x_pos, final_value, color='green', alpha=0.7, width=0.3, label=f'Final Value: {final_value:.3f}')
-        
-        # Add horizontal line at final value
-        plt.axhline(y=final_value, color='green', linestyle='--', alpha=0.5)
-        
-        # Add labels
-        plt.xlabel('Features')
-        plt.ylabel('Prediction Value')
-        plt.title(f'SHAP Force Plot\\nBase: {base_value:.3f} → Final: {final_value:.3f} (CKD Risk: {probability*100:.1f}%)')
-        
-        # Add legend
-        plt.legend(loc='upper right')
-        
-        # Add grid
-        plt.grid(True, alpha=0.3)
+        plt.barh(np.arange(len(display_names)), display_vals, color=colors)
+        plt.yticks(np.arange(len(display_names)), display_names)
+        plt.axvline(x=0, color='black', linestyle='-', alpha=0.3)
+        plt.title(f"Clinical Feature Impact - Prediction: {'CKD' if prediction == 1 else 'No CKD'} ({probability*100:.1f}%)")
+        plt.xlabel("SHAP Value (Impact on Risk)")
+        plt.grid(True, alpha=0.2)
         plt.tight_layout()
         
-        # Save plot to buffer
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight', dpi=300)
+        plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)
         buf.seek(0)
         plt.close()
         
-        # Convert to base64
-        img_base64 = base64.b64encode(buf.read()).decode()
-        
-        return img_base64
-        
+        return base64.b64encode(buf.getvalue()).decode('utf-8')
     except Exception as e:
-        st.error(f"Error creating SHAP force plot: {e}")
+        st.error(f"Error creating clinical impact plot: {e}")
         return None
 
 def create_feature_contributions_table(input_data):
@@ -390,31 +360,15 @@ def create_feature_contributions_table(input_data):
         st.error(f"Error creating feature contributions table: {e}")
         return None
 
-# Model performance info
-def show_model_info():
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📊 Model Performance")
-    st.sidebar.markdown("""
-    **Fixed Model Metrics:**
-    - **Accuracy:** 98.2%
-    - **CKD Detection:** 96.4%
-    - **Precision:** 88.5%
-    - **AUC:** 99.8%
-    
-    **Clinical Validity:**
-    - Sensitivity: 96.4%
-    - Specificity: 98.4%
-    - False Negative Rate: 3.6%
-    """)
-
 # Sidebar for inputs
-st.sidebar.header("📋 Patient Information")
+st.sidebar.markdown('<div class="icon-header"><i class="fas fa-clipboard-list"></i> <b>Patient Information</b></div>', unsafe_allow_html=True)
 
 def create_input_fields():
     """Create input fields for all features"""
     
     # Demographics
-    st.sidebar.subheader("👤 Demographics")
+    st.sidebar.markdown('---')
+    st.sidebar.markdown('<div class="icon-header"><i class="fas fa-user"></i> <b>Demographics</b></div>', unsafe_allow_html=True)
     gender = st.sidebar.selectbox("Gender", options=[0, 1], format_func=lambda x: "Female" if x == 0 else "Male", index=0)
     age = st.sidebar.slider("Age", min_value=18, max_value=100, value=50, step=1)
     age_category = st.sidebar.selectbox("Age Category", options=[0, 1, 2], 
@@ -422,7 +376,8 @@ def create_input_fields():
                                       index=0)
     
     # Medical History
-    st.sidebar.subheader("📋 Medical History")
+    st.sidebar.markdown('---')
+    st.sidebar.markdown('<div class="icon-header"><i class="fas fa-history"></i> <b>Medical History</b></div>', unsafe_allow_html=True)
     history_diabetes = st.sidebar.selectbox("History of Diabetes", options=[0, 1], format_func=lambda x: "No" if x == 0 else "Yes", index=0)
     history_chd = st.sidebar.selectbox("History of Coronary Heart Disease", options=[0, 1], format_func=lambda x: "No" if x == 0 else "Yes", index=0)
     history_vascular = st.sidebar.selectbox("History of Vascular Disease", options=[0, 1], format_func=lambda x: "No" if x == 0 else "Yes", index=0)
@@ -432,14 +387,16 @@ def create_input_fields():
     history_obesity = st.sidebar.selectbox("History of Obesity", options=[0, 1], format_func=lambda x: "No" if x == 0 else "Yes", index=0)
     
     # Medications
-    st.sidebar.subheader("💊 Medications")
+    st.sidebar.markdown('---')
+    st.sidebar.markdown('<div class="icon-header"><i class="fas fa-pills"></i> <b>Medications</b></div>', unsafe_allow_html=True)
     dld_meds = st.sidebar.selectbox("Dyslipidemia Medications", options=[0, 1], format_func=lambda x: "No" if x == 0 else "Yes", index=0)
     dm_meds = st.sidebar.selectbox("Diabetes Medications", options=[0, 1], format_func=lambda x: "No" if x == 0 else "Yes", index=0)
     htn_meds = st.sidebar.selectbox("Hypertension Medications", options=[0, 1], format_func=lambda x: "No" if x == 0 else "Yes", index=0)
     acei_arb = st.sidebar.selectbox("ACEI/ARB Medications", options=[0, 1], format_func=lambda x: "No" if x == 0 else "Yes", index=0)
     
     # Clinical Measurements
-    st.sidebar.subheader("🔬 Clinical Measurements")
+    st.sidebar.markdown('---')
+    st.sidebar.markdown('<div class="icon-header"><i class="fas fa-microscope"></i> <b>Clinical Measurements</b></div>', unsafe_allow_html=True)
     cholesterol = st.sidebar.slider("Total Cholesterol (mmol/L)", min_value=2.0, max_value=10.0, value=5.0, step=0.1)
     triglycerides = st.sidebar.slider("Triglycerides (mmol/L)", min_value=0.1, max_value=7.0, value=1.3, step=0.1)
     hba1c = st.sidebar.slider("HbA1c (%)", min_value=3.5, max_value=20.0, value=6.5, step=0.1)
@@ -481,7 +438,7 @@ def create_input_fields():
 
 def create_feature_importance_display():
     """Display feature importance information"""
-    st.subheader("📊 Key Risk Factors")
+    st.markdown('<div class="icon-header"><i class="fas fa-chart-bar"></i> <b>Key Risk Factors</b></div>', unsafe_allow_html=True)
     
     # Clinical importance based on medical knowledge
     importance_data = {
@@ -497,9 +454,9 @@ def create_feature_importance_display():
     st.dataframe(df_importance, use_container_width=True)
     
     st.info("""
-    🏥 **Clinical Note**: The fixed model has 96.4% sensitivity for CKD detection, 
-    meaning it correctly identifies 96 out of 100 CKD cases. Real SHAP explanations 
-    provide exact contributions of each feature to the prediction.
+    Clinical Note: This model provides personalized risk assessments based on a comprehensive 
+    set of clinical features. Real SHAP explanations show the exact contributions of each 
+    feature to individual patient predictions, ensuring clinical transparency.
     """)
 
 def main():
@@ -514,25 +471,24 @@ def main():
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.subheader("📋 Input Summary")
+        st.markdown('<div class="icon-header"><i class="fas fa-file-medical-alt"></i> <b>Input Summary</b></div>', unsafe_allow_html=True)
         
         # Display current inputs in a nice format
         input_df = pd.DataFrame([input_data])
         st.dataframe(input_df.T.rename(columns={0: 'Value'}), use_container_width=True)
         
         # Prediction button
-        if st.button("🔮 Predict CKD Risk with SHAP", type="primary", use_container_width=True):
+        if st.button("PREDICT CKD RISK WITH SHAP", type="primary", use_container_width=True):
             prediction_result = make_prediction_with_shap(input_data)
     
     with col2:
         create_feature_importance_display()
-        show_model_info()
     
     # Disclaimer
     st.warning("""
-    ⚠️ **Medical Disclaimer**: This app uses a validated machine learning model with 96.4% 
-    CKD detection accuracy and real SHAP explanations. However, it should not be used 
-    as the sole basis for medical decisions. Always consult with qualified healthcare professionals.
+    **Medical Disclaimer**: This app uses a validated machine learning model and real SHAP 
+    explanations to assist clinical decision-making. However, it MUST NOT be used as the 
+    sole basis for diagnosis or treatment. Always consult with qualified medical professionals.
     """)
 
 def make_prediction_with_shap(input_data):
@@ -553,15 +509,15 @@ def make_prediction_with_shap(input_data):
         contributions_table = create_feature_contributions_table(input_data)
         
         # Display results
-        st.subheader("🎯 Prediction Results")
+        st.markdown('<div class="icon-header"><i class="fas fa-bullseye"></i> <b>Prediction Results</b></div>', unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         
         with col1:
             if prediction == 1:
-                st.error("🔴 **HIGH RISK**: CKD predicted within 35 months")
+                st.markdown('<div style="background-color: #fee2e2; color: #b91c1c; padding: 1rem; border-radius: 8px; font-weight: 700;"><i class="fas fa-exclamation-triangle"></i> CLINICAL ALERT: HIGH RISK - CKD predicted within 35 months</div>', unsafe_allow_html=True)
             else:
-                st.success("🟢 **LOW RISK**: No CKD predicted within 35 months")
+                st.markdown('<div style="background-color: #dcfce7; color: #15803d; padding: 1rem; border-radius: 8px; font-weight: 700;"><i class="fas fa-check-circle"></i> CLINICAL STATUS: LOW RISK - No CKD predicted within 35 months</div>', unsafe_allow_html=True)
         
         with col2:
             # Probability display
@@ -572,63 +528,47 @@ def make_prediction_with_shap(input_data):
             st.metric("No CKD Probability", f"{prob_no_ckd:.1f}%")
         
         # Risk assessment
-        st.subheader("📈 Risk Assessment")
+        st.markdown('<div class="icon-header"><i class="fas fa-heart-rate"></i> <b>Risk Assessment</b></div>', unsafe_allow_html=True)
         
         if prob_ckd < 20:
             risk_level = "Very Low"
-            color = "🟢"
+            risk_color = "#15803d"
         elif prob_ckd < 40:
             risk_level = "Low"
-            color = "🟡"
+            risk_color = "#ca8a04"
         elif prob_ckd < 60:
             risk_level = "Moderate"
-            color = "🟠"
+            risk_color = "#ea580c"
         elif prob_ckd < 80:
             risk_level = "High"
-            color = "🔴"
+            risk_color = "#b91c1c"
         else:
             risk_level = "Very High"
-            color = "🔴"
+            risk_color = "#991b1b"
         
-        st.write(f"{color} **Risk Level: {risk_level}**")
-        st.write(f"**CKD Probability: {prob_ckd:.1f}%**")
+        st.markdown(f'<div style="font-weight: 700; color: {risk_color}; margin-bottom: 10px;"><i class="fas fa-microscope"></i> Risk Level: {risk_level}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-weight: 700; color: #1e3a8a;"><i class="fas fa-percentage"></i> CKD Probability: {prob_ckd:.1f}%</div>', unsafe_allow_html=True)
         
         # SHAP Explanations
-        st.subheader("🔍 Real SHAP Explanations - Why this prediction?")
+        st.markdown('<div class="icon-header"><i class="fas fa-search-plus"></i> <b>Real SHAP Explanations - Clinical Transparency</b></div>', unsafe_allow_html=True)
         
-        if waterfall_img:
-            st.subheader("💧 SHAP Waterfall Plot")
-            st.markdown("""
-            **How to read this plot:**
-            - Base value: Average prediction for all patients
-            - Red bars: Features that increase CKD risk
-            - Blue bars: Features that decrease CKD risk
-            - Final value: Prediction for this specific patient
-            """)
-            st.image(f"data:image/png;base64,{waterfall_img}", use_container_width=True)
+
         
         if force_img:
-            st.subheader("⚡ SHAP Force Plot")
+            st.markdown('<b><i class="fas fa-stethoscope"></i> Clinical Feature Impact Plot</b>', unsafe_allow_html=True)
             st.markdown("""
-            **How to read this plot:**
-            - Shows how each feature pushes the prediction higher or lower
-            - Red = pushes toward CKD prediction
-            - Blue = pushes away from CKD prediction
+            **Clinical Interpretation:**
+            - Ranked by absolute impact on the prediction result
+            - Features pushing to the **right** (Red) increase predicted risk
+            - Features pushing to the **left** (Blue) decrease predicted risk
             """)
             st.image(f"data:image/png;base64,{force_img}", use_container_width=True)
         
-        if summary_img:
-            st.subheader("📊 SHAP Summary Plot")
-            st.markdown("""
-            **How to read this plot:**
-            - Shows the magnitude of each feature's contribution
-            - Longer bars = more important for this prediction
-            """)
-            st.image(f"data:image/png;base64,{summary_img}", use_container_width=True)
+
         
         # Feature contributions table
         if contributions_table is not None:
-            st.subheader("📋 Detailed Feature Contributions")
+            st.markdown('<b><i class="fas fa-table-medical"></i> Detailed Feature Contributions</b>', unsafe_allow_html=True)
             st.markdown("""
             **Feature Contributions Table:**
             - Shows exact SHAP values for each feature
@@ -639,42 +579,48 @@ def make_prediction_with_shap(input_data):
             st.dataframe(contributions_table.head(15), use_container_width=True)
         
         # Recommendations
-        st.subheader("💡 Clinical Recommendations")
+        st.markdown('<div class="icon-header"><i class="fas fa-lightbulb"></i> <b>Clinical Recommendations</b></div>', unsafe_allow_html=True)
         
         if prob_ckd > 50:
-            st.write("""
-            🏥 **Recommended Actions:**
-            - Consult with a nephrologist immediately
-            - Comprehensive kidney function tests (eGFR, creatinine, urine analysis)
-            - Strict blood pressure control (<130/80 mmHg)
-            - Blood sugar management if diabetic
-            - Avoid nephrotoxic medications (NSAIDs, certain antibiotics)
-            - Consider dietary modifications (low protein, low sodium, low potassium)
-            - Regular monitoring every 3 months
-            """)
+            st.markdown("""
+            <div style="background-color: #f8fafc; border-left: 4px solid #1e40af; padding: 1rem; margin-top: 1rem;">
+                <b><i class="fas fa-stethoscope"></i> Recommended Actions:</b><br>
+                - Consult with a nephrologist immediately<br>
+                - Comprehensive kidney function tests (eGFR, creatinine, urine analysis)<br>
+                - Strict blood pressure control (<130/80 mmHg)<br>
+                - Blood sugar management if diabetic<br>
+                - Avoid nephrotoxic medications (NSAIDs, certain antibiotics)<br>
+                - Consider dietary modifications (low protein, low sodium, low potassium)<br>
+                - Regular monitoring every 3 months
+            </div>
+            """, unsafe_allow_html=True)
         elif prob_ckd > 30:
-            st.write("""
-            🏥 **Recommended Actions:**
-            - Consult primary care physician
-            - Annual kidney function screening
-            - Monitor blood pressure and blood sugar
-            - Maintain healthy lifestyle
-            - Review medications with healthcare provider
-            """)
+            st.markdown("""
+            <div style="background-color: #f8fafc; border-left: 4px solid #3b82f6; padding: 1rem; margin-top: 1rem;">
+                <b><i class="fas fa-user-md"></i> Recommended Actions:</b><br>
+                - Consult primary care physician<br>
+                - Annual kidney function screening<br>
+                - Monitor blood pressure and blood sugar<br>
+                - Maintain healthy lifestyle<br>
+                - Review medications with healthcare provider
+            </div>
+            """, unsafe_allow_html=True)
         else:
-            st.write("""
-            ✅ **Preventive Measures:**
-            - Regular health check-ups
-            - Maintain healthy blood pressure (<120/80 mmHg)
-            - Control blood sugar levels
-            - Regular exercise and healthy diet
-            - Avoid smoking and limit alcohol
-            - Stay well hydrated
-            - Maintain healthy weight
-            """)
+            st.markdown("""
+            <div style="background-color: #f8fafc; border-left: 4px solid #22c55e; padding: 1rem; margin-top: 1rem;">
+                <b><i class="fas fa-shield-alt"></i> Preventive Measures:</b><br>
+                - Regular health check-ups<br>
+                - Maintain healthy blood pressure (<120/80 mmHg)<br>
+                - Control blood sugar levels<br>
+                - Regular exercise and healthy diet<br>
+                - Avoid smoking and limit alcohol<br>
+                - Stay well hydrated<br>
+                - Maintain healthy weight
+            </div>
+            """, unsafe_allow_html=True)
         
         # Display probability chart
-        st.subheader("📊 Probability Distribution")
+        st.markdown('<div class="icon-header"><i class="fas fa-chart-area"></i> <b>Probability Distribution</b></div>', unsafe_allow_html=True)
         
         prob_df = pd.DataFrame({
             'Outcome': ['No CKD', 'CKD'],
@@ -682,22 +628,6 @@ def make_prediction_with_shap(input_data):
         })
         
         st.bar_chart(prob_df.set_index('Outcome'), use_container_width=True)
-        
-        # Model performance info
-        st.subheader("📈 Model Performance Information")
-        st.info(f"""
-        **Fixed Model Statistics:**
-        - Overall Accuracy: 98.2%
-        - CKD Detection Rate: 96.4%
-        - False Negative Rate: Only 3.6%
-        - Validated on 491 patient records
-        
-        **Real SHAP Explanations:**
-        - SHAP values show exact contribution of each feature
-        - Based on game theory and local explanations
-        - Provides interpretable AI for medical decisions
-        - Helps clinicians understand model reasoning
-        """)
         
         return True
         

@@ -7,7 +7,67 @@ from matplotlib.backends.backend_pdf import PdfPages
 import gc
 import os
 import scipy.stats
-from scipy.stats import chi2_contingency, mannwhitneyu, ttest_ind, norm
+from scipy.stats import chi2_contingency, mannwhitneyu, ttest_ind, norm, t, beta
+
+def calculate_confidence_interval(metric_value, n_samples, confidence_level=0.95, metric_type='proportion'):
+    """
+    Calculate 95% confidence interval for classification metrics using appropriate methods
+    
+    Parameters:
+    -----------
+    metric_value : float
+        The metric value (e.g., accuracy, precision, recall, f1)
+    n_samples : int
+        Number of samples in the test set
+    confidence_level : float
+        Confidence level (default 0.95 for 95% CI)
+    metric_type : str
+        Type of metric ('proportion' for accuracy/precision/recall, 'f1' for F1-score, 'auc' for ROC-AUC)
+    
+    Returns:
+    --------
+    tuple : (lower_bound, upper_bound) for the confidence interval
+    """
+    alpha = 1 - confidence_level
+    
+    if metric_type in ['proportion', 'f1']:
+        # For proportions and F1-score, use Clopper-Pearson (exact) method
+        if metric_value == 0:
+            return (0.0, 1 - (alpha/2)**(1/n_samples))
+        elif metric_value == 1:
+            return ((alpha/2)**(1/n_samples), 1.0)
+        else:
+            # Clopper-Pearson exact interval
+            successes = int(metric_value * n_samples)
+            lower = beta.ppf(alpha/2, successes, n_samples - successes + 1)
+            upper = beta.ppf(1 - alpha/2, successes + 1, n_samples - successes)
+            return (max(0, lower), min(1, upper))
+    
+    elif metric_type == 'auc':
+        # For ROC-AUC, use Hanley-McNeil method
+        if metric_value == 0.5:
+            return (0.5, 0.5)
+        elif metric_value == 1.0:
+            return (1.0 - (alpha/2)**(1/n_samples), 1.0)
+        else:
+            # Hanley-McNeil standard error for AUC
+            se_auc = np.sqrt((metric_value * (1 - metric_value) + 
+                            (n_samples - 1) * (0.5 - metric_value)**2) / (n_samples * (n_samples - 1)))
+            z_critical = norm.ppf(1 - alpha/2)
+            margin = z_critical * se_auc
+            return (max(0, metric_value - margin), min(1, metric_value + margin))
+    
+    else:
+        # Fallback to normal approximation
+        if metric_value == 0 or metric_value == 1:
+            return (metric_value, metric_value)
+        
+        standard_error = np.sqrt((metric_value * (1 - metric_value)) / n_samples)
+        z_critical = norm.ppf(1 - alpha/2)
+        margin_of_error = z_critical * standard_error
+        lower_bound = max(0, metric_value - margin_of_error)
+        upper_bound = min(1, metric_value + margin_of_error)
+        return (lower_bound, upper_bound)
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, OrdinalEncoder, OneHotEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
@@ -15,7 +75,7 @@ from sklearn.pipeline import Pipeline as ImbPipeline
 from sklearn.model_selection import train_test_split, RandomizedSearchCV, cross_validate
 from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score,
                            roc_auc_score, roc_curve, precision_recall_curve, confusion_matrix,
-                           classification_report, average_precision_score)
+                           classification_report, average_precision_score, matthews_corrcoef, cohen_kappa_score)
 from sklearn.metrics import auc
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, ExtraTreesClassifier, VotingClassifier, StackingClassifier
 from sklearn.linear_model import LogisticRegression
@@ -206,7 +266,7 @@ def compare_random_forest_with_others(X_train, y_train, X_test, y_test, feature_
     # Define models to compare (excluding Random Forest)
     other_models = {
         'Logistic Regression': LogisticRegression(random_state=42, max_iter=1000, class_weight='balanced'),
-        'LightGBM': lgb.LGBMClassifier(random_state=42, verbose=-1, class_weight='balanced', feature_name='auto'),
+        'LightGBM': lgb.LGBMClassifier(random_state=42, verbose=-1, class_weight='balanced'),
         'CatBoost': cb.CatBoostClassifier(random_state=42, verbose=0, auto_class_weights='Balanced'),
         'Gradient Boosting': GradientBoostingClassifier(random_state=42),
         'Naive Bayes': GaussianNB(),
@@ -466,7 +526,7 @@ def compare_random_forest_with_others_t_test(X_train, y_train, X_test, y_test, f
     # Define models to compare (excluding Random Forest)
     other_models = {
         'Logistic Regression': LogisticRegression(random_state=42, max_iter=1000, class_weight='balanced'),
-        'LightGBM': lgb.LGBMClassifier(random_state=42, verbose=-1, class_weight='balanced', feature_name='auto'),
+        'LightGBM': lgb.LGBMClassifier(random_state=42, verbose=-1, class_weight='balanced'),
         'CatBoost': cb.CatBoostClassifier(random_state=42, verbose=0, auto_class_weights='Balanced'),
         'Gradient Boosting': GradientBoostingClassifier(random_state=42),
         'Naive Bayes': GaussianNB(),
@@ -2244,37 +2304,22 @@ X, y, preprocessor, features = preprocess_dataset(
     config['minmax_scale_cols'], config['robust_scale_cols']
 )
 
-# Apply BorderlineSMOTE BEFORE train-test splitting
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 print(f"\n{'='*50}")
-print(f"BORDERLINESMOTE RESAMPLING (BEFORE TRAIN-TEST SPLIT)")
-print(f"{'='*50}")
-print(f"Original dataset shape: {X.shape}")
-print(f"Original target distribution: {pd.Series(y).value_counts()}")
-
-# First preprocess the entire dataset to get proper feature format
-X_preprocessed = preprocessor.fit_transform(X)
-feature_names = clean_feature_names(preprocessor.get_feature_names_out())
-
-# Apply BorderlineSMOTE on the entire preprocessed dataset
-borderlinesmote = BorderlineSMOTE(sampling_strategy='auto', random_state=42, kind='borderline-1')
-X_resampled, y_resampled = borderlinesmote.fit_resample(X_preprocessed, y)
-
-print(f"Dataset shape after resampling: {X_resampled.shape}")
-print(f"Resampled target distribution: {pd.Series(y_resampled).value_counts()}")
-
-# Train-test split AFTER balancing
-X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42, stratify=y_resampled)
-print(f"\n{'='*50}")
-print(f"TRAIN-TEST SPLIT (AFTER BALANCING)")
+print(f"TRAIN-TEST SPLIT")
 print(f"{'='*50}")
 print(f"Training set shape: {X_train.shape}")
 print(f"Test set shape: {X_test.shape}")
 print(f"Training target distribution: {y_train.value_counts()}")
 print(f"Test target distribution: {y_test.value_counts()}")
 
-# Set preprocessed data (already done)
-X_train_preprocessed = X_train
-X_test_preprocessed = X_test
+# *** FIXED: Preprocess ONLY on training data first, then transform test ***
+X_train_preprocessed = preprocessor.fit_transform(X_train)
+X_test_preprocessed = preprocessor.transform(X_test)
+
+# Get feature names AFTER fitting on training data
+feature_names = clean_feature_names(preprocessor.get_feature_names_out())
 
 print(f"\n{'='*50}")
 print(f"PREPROCESSING RESULTS")
@@ -2294,7 +2339,7 @@ print(f"- New features added: {new_features}")
 # Show one-hot encoding details
 print(f"\nOne-hot encoding details:")
 for col in config['non_binary_categorical_cols']:
-    unique_values = X[col].dropna().unique()
+    unique_values = X_train[col].dropna().unique()
     print(f"- '{col}' with {len(unique_values)} categories expanded to {len(unique_values)-1} features")
     print(f"  Categories: {sorted(unique_values)}")
 
@@ -2305,9 +2350,21 @@ for i, name in enumerate(feature_names[:10]):
 if len(feature_names) > 10:
     print(f"... and {len(feature_names) - 10} more")
 
+# Apply BorderlineSMOTE
+borderlinesmote = BorderlineSMOTE(sampling_strategy='auto', random_state=42, kind='borderline-1')
+X_train_resampled, y_train_resampled = borderlinesmote.fit_resample(X_train_preprocessed, y_train)
+
+print(f"\n{'='*50}")
+print(f"BORDERLINESMOTE RESAMPLING")
+print(f"{'='*50}")
+print(f"Training set shape before resampling: {X_train_preprocessed.shape}")
+print(f"Training set shape after resampling: {X_train_resampled.shape}")
+print(f"Original training target distribution: {pd.Series(y_train).value_counts()}")
+print(f"Resampled training target distribution: {pd.Series(y_train_resampled).value_counts()}")
+
 # Apply Advanced Feature Selection for Better Performance
 X_train_selected, X_test_selected, selected_indices = advanced_feature_selection(
-    X_train, y_train, X_test, method='hybrid', k_best=15
+    X_train_resampled, y_train_resampled, X_test_preprocessed, method='hybrid', k_best=15
 )
 
 # Update feature names for selected features
@@ -2316,8 +2373,8 @@ if selected_indices is not None:
     print(f"\nSelected features: {selected_feature_names}")
 else:
     selected_feature_names = feature_names
-    X_train_selected = X_train
-    X_test_selected = X_test
+    X_train_selected = X_train_resampled
+    X_test_selected = X_test_preprocessed
 
 # Original class distribution
 class_counts = y.value_counts()
@@ -2335,7 +2392,7 @@ plt.savefig(pdf_pages, format='pdf', bbox_inches='tight')
 plt.close()
 
 # Resampled class distribution
-resampled_counts = pd.Series(y_train).value_counts()
+resampled_counts = pd.Series(y_train_resampled).value_counts()
 print(f"\nResampled Training Class Distribution ({dataset_name}):")
 print(resampled_counts)
 print(f"Resampled Imbalance Ratio: {resampled_counts[1]/resampled_counts[0]:.2f}")
@@ -2374,11 +2431,11 @@ for name, (clf, param_grid) in classifiers.items():
         error_score='raise'
     )
     try:
-        search.fit(X_train, y_train)
+        search.fit(X_train_resampled, y_train_resampled)
         best_clf = search.best_estimator_
         tuned_classifiers[name] = best_clf
 
-        cv_results = cross_validate(best_clf, X_train, y_train, cv=5, scoring=scoring)
+        cv_results = cross_validate(best_clf, X_train_resampled, y_train_resampled, cv=5, scoring=scoring)
         cv_results_list.append({
             'Model': name,
             'CV Accuracy': np.mean(cv_results['test_accuracy']),
@@ -2390,13 +2447,42 @@ for name, (clf, param_grid) in classifiers.items():
 
         y_pred = best_clf.predict(X_test_preprocessed)
         y_prob = best_clf.predict_proba(X_test_preprocessed)[:, 1]
+        
+        # Calculate test metrics
+        test_accuracy = accuracy_score(y_test, y_pred)
+        test_f1 = f1_score(y_test, y_pred)
+        test_recall = recall_score(y_test, y_pred)
+        test_precision = precision_score(y_test, y_pred)
+        test_mcc = matthews_corrcoef(y_test, y_pred)
+        test_cohen_kappa = cohen_kappa_score(y_test, y_pred)
+        test_roc_auc = roc_auc_score(y_test, y_prob)
+        
+        # Calculate 95% confidence intervals using appropriate methods
+        n_test_samples = len(y_test)
+        ci_accuracy = calculate_confidence_interval(test_accuracy, n_test_samples, metric_type='proportion')
+        ci_f1 = calculate_confidence_interval(test_f1, n_test_samples, metric_type='f1')
+        ci_recall = calculate_confidence_interval(test_recall, n_test_samples, metric_type='proportion')
+        ci_precision = calculate_confidence_interval(test_precision, n_test_samples, metric_type='proportion')
+        ci_mcc = calculate_confidence_interval(test_mcc, n_test_samples, metric_type='proportion')
+        ci_cohen_kappa = calculate_confidence_interval(test_cohen_kappa, n_test_samples, metric_type='proportion')
+        ci_roc_auc = calculate_confidence_interval(test_roc_auc, n_test_samples, metric_type='auc')
+        
         test_results_list.append({
             'Model': name,
-            'Test Accuracy': accuracy_score(y_test, y_pred),
-            'Test F1': f1_score(y_test, y_pred),
-            'Test Recall': recall_score(y_test, y_pred),
-            'Test Precision': precision_score(y_test, y_pred),
-            'Test ROC AUC': roc_auc_score(y_test, y_prob)
+            'Test Accuracy': test_accuracy,
+            'Test Accuracy CI 95%': f"[{ci_accuracy[0]:.3f}, {ci_accuracy[1]:.3f}]",
+            'Test F1': test_f1,
+            'Test F1 CI 95%': f"[{ci_f1[0]:.3f}, {ci_f1[1]:.3f}]",
+            'Test Recall': test_recall,
+            'Test Recall CI 95%': f"[{ci_recall[0]:.3f}, {ci_recall[1]:.3f}]",
+            'Test Precision': test_precision,
+            'Test Precision CI 95%': f"[{ci_precision[0]:.3f}, {ci_precision[1]:.3f}]",
+            'Test MCC': test_mcc,
+            'Test MCC CI 95%': f"[{ci_mcc[0]:.3f}, {ci_mcc[1]:.3f}]",
+            'Test Cohen Kappa': test_cohen_kappa,
+            'Test Cohen Kappa CI 95%': f"[{ci_cohen_kappa[0]:.3f}, {ci_cohen_kappa[1]:.3f}]",
+            'Test ROC AUC': test_roc_auc,
+            'Test ROC AUC CI 95%': f"[{ci_roc_auc[0]:.3f}, {ci_roc_auc[1]:.3f}]"
         })
 
         fpr, tpr, _ = roc_curve(y_test, y_prob)
@@ -2467,7 +2553,7 @@ best_pipeline = tuned_classifiers[best_model_name]
 print(f"\nBest Individual Model (Highest Accuracy, {dataset_name}): {best_model_name}")
 
 # Refit best pipeline
-best_pipeline.fit(X_train, y_train)
+best_pipeline.fit(X_train_resampled, y_train_resampled)
 y_pred = best_pipeline.predict(X_test_preprocessed)
 y_prob = best_pipeline.predict_proba(X_test_preprocessed)[:, 1]
 
@@ -2479,6 +2565,8 @@ print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
 print(f"Precision: {precision_score(y_test, y_pred):.4f}")
 print(f"Recall: {recall_score(y_test, y_pred):.4f}")
 print(f"F1-Score: {f1_score(y_test, y_pred):.4f}")
+print(f"MCC: {matthews_corrcoef(y_test, y_pred):.4f}")
+print(f"Cohen's Kappa: {cohen_kappa_score(y_test, y_pred):.4f}")
 print(f"ROC AUC: {roc_auc_score(y_test, y_prob):.4f}")
 print("\nClassification Report:")
 print(classification_report(y_test, y_pred, target_names=['Negative', 'Positive']))
@@ -2490,13 +2578,13 @@ print(f"{'='*50}")
 
 try:
     # Use 100% of training data for background and 100% of test data for explanations
-    background_size = len(X_train)
+    background_size = len(X_train_resampled)
     explain_size = len(X_test_preprocessed)
 
     print(f"Using {background_size} background samples (100% of training data) and explaining {explain_size} test samples (100% of test data)")
 
     # Use full training data for background
-    X_background = X_train
+    X_background = X_train_resampled
 
     # Use full test data for explanations
     X_explain = X_test_preprocessed
@@ -2567,11 +2655,11 @@ print(f"{'='*50}")
 
 try:
     print(f"Initializing LIME explainer...")
-    print(f"X_train shape: {X_train.shape}")
+    print(f"X_train_resampled shape: {X_train_resampled.shape}")
     print(f"feature_names length: {len(feature_names)}")
 
     # Convert training data to DataFrame for LIME
-    X_train_df = pd.DataFrame(X_train, columns=feature_names)
+    X_train_df = pd.DataFrame(X_train_resampled, columns=feature_names)
 
     lime_explainer = lime.lime_tabular.LimeTabularExplainer(
         X_train_df.values,  # Use numpy array as before
@@ -2687,7 +2775,7 @@ try:
     
     # Perform McNemar's test comparison
     mcnemar_results, mcnemar_df = compare_random_forest_with_others(
-        X_train, y_train, 
+        X_train_resampled, y_train_resampled, 
         X_test_preprocessed, y_test, 
         feature_names
     )
@@ -2709,7 +2797,7 @@ print(f"{'='*80}")
 try:
     # Perform t-test accuracy comparison
     t_test_results, t_test_df = compare_random_forest_with_others_t_test(
-        X_train, y_train, 
+        X_train_resampled, y_train_resampled, 
         X_test_preprocessed, y_test, 
         feature_names
     )
@@ -2726,8 +2814,8 @@ except Exception as e:
 # Apply the clinical interpretability framework
 clinical_interpretability_framework(
     best_model=best_model_for_clinical,
-    X_train=X_train,
-    y_train=y_train,
+    X_train=X_train_resampled,
+    y_train=y_train_resampled,
     X_test=X_test_preprocessed,
     y_test=y_test,
     feature_names=feature_names,
